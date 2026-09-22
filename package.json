@@ -1,0 +1,33 @@
+{
+  "name": "threshold-evoting",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "registrar-service",
+    "voter-client",
+    "simulation",
+    "web/backend",
+    "test"
+  ],
+  "scripts": {
+    "setup":       "node scripts/setup.js",
+    "keygen":      "node registrar-service/keygen.js",
+    "deploy":      "npx hardhat run scripts/deploy.js --network localhost",
+    "node:start":  "npx hardhat node",
+    "reg1":        "cross-env REGISTRAR_ID=1 node registrar-service/registrar.js",
+    "reg2":        "cross-env REGISTRAR_ID=2 node registrar-service/registrar.js",
+    "reg3":        "cross-env REGISTRAR_ID=3 node registrar-service/registrar.js",
+    "backend":     "node web/backend/server.js",
+    "frontend":    "cd web/frontend && npm run dev",
+    "simulate":    "node simulation/simulate.js",
+    "test":        "mocha test/threshold.test.js test/circuit.test.js && hardhat test test/contracts.test.js",
+    "compile":     "npx hardhat compile",
+    "circuit:build": "node scripts/circuit-build.js",
+    "stop":        "node scripts/stop.js"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.3",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "cross-env": "^7.0.3"
+  }
+}

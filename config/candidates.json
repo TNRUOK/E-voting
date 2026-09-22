@@ -1,0 +1,5 @@
+[
+  { "id": 1, "name": "Alice",  "tagline": "Transparency for a Better Future",  "color": "#7C3AED" },
+  { "id": 2, "name": "Bob",    "tagline": "Security, Stability, Progress",      "color": "#06B6D4" },
+  { "id": 3, "name": "Carol",  "tagline": "Innovation and Inclusion",            "color": "#10B981" }
+]

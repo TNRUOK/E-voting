@@ -1,0 +1,12 @@
+node_modules/
+artifacts/
+cache/
+circuits/build/
+circuits/powers_of_tau/*.ptau
+registrar-service/shares/
+.env
+deployed.json
+coverage/
+typechain-types/
+web/frontend/dist/
+web/frontend/node_modules/

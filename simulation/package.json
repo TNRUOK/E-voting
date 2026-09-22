@@ -1,0 +1,13 @@
+{
+  "name": "simulation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node simulate.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "ethers": "^6.13.1",
+    "chalk": "^4.1.2"
+  }
+}
