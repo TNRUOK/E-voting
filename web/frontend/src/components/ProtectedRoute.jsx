@@ -3,16 +3,26 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 /**
- * Wraps any route that requires authentication.
- * Unauthenticated visitors are redirected to /login with the
- * original `from` path saved so we can redirect back after login.
+ * ProtectedRoute
+ *
+ * Props:
+ *   children      — content to render when access is granted
+ *   requireAdmin  — if true, also enforces role === 'admin'
+ *
+ * Redirect behaviour:
+ *   - Unauthenticated → /login  (saves `from` for post-login redirect)
+ *   - Authenticated but not admin (when requireAdmin=true) → / (home)
  */
-export default function ProtectedRoute({ children }) {
-  const { user } = useAuth();
-  const location  = useLocation();
+export default function ProtectedRoute({ children, requireAdmin = false }) {
+  const { user, isAdmin } = useAuth();
+  const location = useLocation();
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/" replace />;
   }
 
   return children;

@@ -18,6 +18,7 @@
  */
 
 "use strict";
+require("dotenv").config();
 
 const express = require("express");
 const cors    = require("cors");
@@ -31,6 +32,9 @@ app.use(cors());
 app.use(express.json());
 
 // ── Load routes ───────────────────────────────────────────────────────────────
+const { requireAuth, requireAdmin } = require("./middleware/auth");
+
+app.use("/api/auth",       require("./routes/auth"));
 app.use("/api/voters",     require("./routes/voters"));
 app.use("/api/votes",      require("./routes/votes"));
 app.use("/api/tally",      require("./routes/tally"));
@@ -38,7 +42,7 @@ app.use("/api/registrars", require("./routes/registrars"));
 app.use("/api/merkle",     require("./routes/merkle"));
 app.use("/api/candidates", require("./routes/candidates"));
 app.use("/api/simulation", require("./routes/simulation"));
-app.use("/api/admin",      require("./routes/admin"));
+app.use("/api/admin",      requireAuth, requireAdmin, require("./routes/admin"));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

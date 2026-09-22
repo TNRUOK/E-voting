@@ -60,12 +60,12 @@ export default function Login() {
         if (password !== confirm) {
           setError("Passwords do not match."); setLoading(false); return;
         }
-        const result = signup(username.trim(), password);
+        const result = await signup(username.trim(), password);
         if (!result.ok) { setError(result.error); setLoading(false); return; }
         setSuccess("Account created! Redirecting...");
         setTimeout(() => navigate("/"), 900);
       } else {
-        const result = login(username.trim(), password);
+        const result = await login(username.trim(), password);
         if (!result.ok) { setError(result.error); setLoading(false); return; }
         setSuccess("Welcome back! Redirecting...");
         setTimeout(() => navigate("/"), 700);

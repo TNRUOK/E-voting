@@ -10,3 +10,6 @@ coverage/
 typechain-types/
 web/frontend/dist/
 web/frontend/node_modules/
+web/backend/node_modules/
+web/backend/.env
+web/backend/data/users.json

@@ -1,6 +1,10 @@
 "use strict";
 const router = require("express").Router();
+const { requireAuth, requireAdmin } = require("../middleware/auth");
 const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, getVoting, registrarCounters, commitmentMeta, auditVotes } = require("../shared");
+
+// Protect all admin routes
+router.use(requireAuth, requireAdmin);
 
 /**
  * GET /api/admin/audit

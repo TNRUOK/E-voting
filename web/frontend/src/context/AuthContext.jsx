@@ -1,104 +1,146 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 const AuthContext = createContext(null);
 
-// Simple deterministic hash (djb2) — good enough for a local demo
-// NOT for production — use bcrypt or Argon2 on a real backend
-function hashPassword(password) {
-  let hash = 5381n;
-  for (let i = 0; i < password.length; i++) {
-    hash = ((hash * 33n) ^ BigInt(password.charCodeAt(i))) & 0xFFFFFFFFFFFFFFFFn;
-  }
-  return hash.toString(16);
+const API_BASE   = "http://localhost:3000";
+const TOKEN_KEY  = "evoting_jwt";
+const SESSION_KEY = "evoting_session";
+
+// ── Token helpers ─────────────────────────────────────────────────────────────
+function saveToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
-const USERS_KEY  = "evoting_users";   // { [username]: { username, passwordHash, createdAt } }
-const SESSION_KEY = "evoting_session"; // { username, loginAt }
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || null;
+}
 
-function getUsers() {
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSION_KEY);
+}
+
+/** Decode JWT payload without verifying (verification is done server-side) */
+function decodeToken(token) {
   try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || "{}");
-    // Ensure default admin account exists
-    if (!users["admin"]) {
-      users["admin"] = {
-        username: "admin",
-        passwordHash: hashPassword("admin123"),
-        role: "admin",
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    }
-    return users;
+    const payload = token.split(".")[1];
+    return JSON.parse(atob(payload));
   } catch {
-    return {};
+    return null;
   }
 }
 
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+/** Returns true if the JWT has expired */
+function isExpired(token) {
+  const decoded = decodeToken(token);
+  if (!decoded || !decoded.exp) return true;
+  return Date.now() / 1000 > decoded.exp;
 }
 
-function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
-  catch { return null; }
+// ── API helper ────────────────────────────────────────────────────────────────
+async function authFetch(endpoint, body) {
+  const res = await fetch(`${API_BASE}/api/auth/${endpoint}`, {
+    method  : "POST",
+    headers : { "Content-Type": "application/json" },
+    body    : JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
 
+// ── AuthProvider ──────────────────────────────────────────────────────────────
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => {
-    getUsers(); // ensure admin exists
-    return getSession();
+    const token = getToken();
+    if (!token || isExpired(token)) {
+      clearToken();
+      return null;
+    }
+    const decoded = decodeToken(token);
+    return decoded ? { username: decoded.username, role: decoded.role } : null;
   });
 
-  const signup = useCallback((username, password) => {
-    if (!username || username.length < 3)
-      return { ok: false, error: "Username must be at least 3 characters." };
-    if (!password || password.length < 6)
-      return { ok: false, error: "Password must be at least 6 characters." };
-
-    const users = getUsers();
-    if (users[username.toLowerCase()])
-      return { ok: false, error: "Username already taken. Try logging in." };
-
-    const role = username.toLowerCase() === "admin" ? "admin" : "voter";
-    const newUser = {
-      username,
-      role,
-      passwordHash: hashPassword(password),
-      createdAt: new Date().toISOString(),
-    };
-    users[username.toLowerCase()] = newUser;
-    saveUsers(users);
-
-    const sess = { username, role, loginAt: new Date().toISOString() };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
-    setSession(sess);
-    return { ok: true };
+  // Periodically check for token expiry
+  useEffect(() => {
+    const id = setInterval(() => {
+      const token = getToken();
+      if (token && isExpired(token)) {
+        clearToken();
+        setSession(null);
+      }
+    }, 60_000); // every minute
+    return () => clearInterval(id);
   }, []);
 
-  const login = useCallback((username, password) => {
-    const users = getUsers();
-    const user  = users[username.toLowerCase()];
-    if (!user)
-      return { ok: false, error: "No account found. Please sign up first." };
-    if (user.passwordHash !== hashPassword(password))
-      return { ok: false, error: "Incorrect password. Please try again." };
+  /**
+   * signup(username, password)
+   * Returns { ok: true } or { ok: false, error: string }
+   */
+  const signup = useCallback(async (username, password) => {
+    try {
+      const data = await authFetch("signup", { username, password });
+      saveToken(data.token);
+      setSession({ username: data.username, role: data.role });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }, []);
 
-    const role = user.role || (user.username.toLowerCase() === "admin" ? "admin" : "voter");
-    const sess = { username: user.username, role, loginAt: new Date().toISOString() };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
-    setSession(sess);
-    return { ok: true };
+  /**
+   * login(username, password)
+   * Returns { ok: true } or { ok: false, error: string }
+   */
+  const login = useCallback(async (username, password) => {
+    try {
+      const data = await authFetch("login", { username, password });
+      saveToken(data.token);
+      setSession({ username: data.username, role: data.role });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY);
+    clearToken();
     setSession(null);
   }, []);
 
-  const isAdmin = session?.role === "admin" || session?.username?.toLowerCase() === "admin";
+  /**
+   * authedFetch(url, options?)
+   * Thin wrapper around window.fetch that injects the Bearer token.
+   * Use this anywhere you need to call a protected API endpoint.
+   */
+  const authedFetch = useCallback(async (url, options = {}) => {
+    const token = getToken();
+    const headers = {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+      clearToken();
+      setSession(null);
+    }
+    return res;
+  }, []);
+
+  const isAdmin = session?.role === "admin";
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.username ?? null, role: session?.role ?? "voter", isAdmin, login, signup, logout }}>
+    <AuthContext.Provider value={{
+      session,
+      user    : session?.username ?? null,
+      role    : session?.role ?? "voter",
+      isAdmin,
+      login,
+      signup,
+      logout,
+      authedFetch,
+      getToken,
+    }}>
       {children}
     </AuthContext.Provider>
   );

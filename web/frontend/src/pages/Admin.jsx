@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Admin() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, authedFetch } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // "all" | "real" | "decoy"
@@ -13,7 +13,7 @@ export default function Admin() {
   const fetchAuditData = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/audit");
+      const res = await authedFetch("/api/admin/audit");
       if (!res.ok) throw new Error("Failed to fetch admin audit logs");
       const json = await res.json();
       if (json.success) {
@@ -35,7 +35,7 @@ export default function Admin() {
   const clearLogs = async () => {
     if (!window.confirm("Are you sure you want to clear the audit logs?")) return;
     try {
-      await fetch("/api/admin/clear-audit", { method: "POST" });
+      await authedFetch("/api/admin/clear-audit", { method: "POST" });
       fetchAuditData();
     } catch (e) {
       console.error(e);

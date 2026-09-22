@@ -30,7 +30,7 @@ export default function App() {
                   <Route path="/vote"       element={<Vote />} />
                   <Route path="/dashboard"  element={<Dashboard />} />
                   <Route path="/simulation" element={<Simulation />} />
-                  <Route path="/admin"      element={<Admin />} />
+                  <Route path="/admin"      element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
                 </Routes>
               </main>
               <footer style={{
