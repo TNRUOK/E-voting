@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function Register() {
+  const { isAdmin } = useAuth();
   const [voterName, setVoterName] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [copiedKey, setCopiedKey] = useState(null);
+  const [showAdminBreakdown, setShowAdminBreakdown] = useState(false);
 
   const steps = [
     { title: "Generate Keys", desc: "Creating Real + Decoy credentials with Poseidon commitments" },
@@ -272,90 +275,200 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Educational / Professor Presentation Mode */}
-          <div style={{ marginTop: 32, background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(124, 58, 237, 0.4)", borderRadius: "var(--radius-sm)", padding: "24px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="badge badge-purple" style={{ fontSize: "0.75rem" }}>
-                  🎓 Presentation / Viva Mode
+          {/* Admin-Only Cryptographic Pipeline Toggle */}
+          {isAdmin && (
+            <div style={{
+              marginTop: 24,
+              padding: "16px 20px",
+              background: "rgba(124, 58, 237, 0.12)",
+              border: "1px dashed rgba(124, 58, 237, 0.5)",
+              borderRadius: "var(--radius-sm)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 12,
+            }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                  <span className="badge badge-purple" style={{ fontSize: "0.7rem", padding: "2px 8px" }}>
+                    👑 Admin Privilege
+                  </span>
+                  <strong style={{ fontSize: "0.95rem", color: "var(--text-main)" }}>
+                    Cryptographic Generation Inspector
+                  </strong>
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  Deep inspection mode for viva / professor demonstration: mathematical breakdown of the 5 issuance steps.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdminBreakdown(!showAdminBreakdown)}
+                className="btn btn-outline"
+                style={{
+                  borderColor: "var(--accent-violet)",
+                  color: "var(--accent-violet-light)",
+                  fontSize: "0.85rem",
+                  padding: "8px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span>{showAdminBreakdown ? "Hide Pipeline Steps ▲" : "🔬 View Pipeline Steps ▼"}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Admin-Only Cryptographic Step-by-Step Breakdown */}
+          {isAdmin && showAdminBreakdown && (
+            <div style={{
+              marginTop: 20,
+              background: "rgba(15, 23, 42, 0.9)",
+              border: "1px solid rgba(124, 58, 237, 0.5)",
+              borderRadius: "var(--radius-sm)",
+              padding: "26px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            }}>
+              <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 14, marginBottom: 20 }}>
+                <span className="badge badge-purple" style={{ fontSize: "0.75rem", marginBottom: 6 }}>
+                  Detailed Mathematical Breakdown (Admin Only)
                 </span>
-                <h3 style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0 }}>
-                  Cryptographic Credential Generation Breakdown
+                <h3 style={{ fontSize: "1.2rem", fontWeight: 700, margin: "4px 0" }}>
+                  Step-by-Step Cryptographic Issuance Pipeline
                 </h3>
+                <p style={{ fontSize: "0.84rem", color: "var(--text-muted)", margin: 0 }}>
+                  Live execution traces and mathematical proof states generated for this voter:
+                </p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                {/* Step 1 */}
+                <div style={{ background: "rgba(0,0,0,0.35)", padding: "16px 20px", borderRadius: "var(--radius-sm)", borderLeft: "3px solid var(--accent-cyan)" }}>
+                  <div style={{ fontWeight: 700, color: "var(--accent-cyan-light)", fontSize: "0.95rem", marginBottom: 6 }}>
+                    Step 1: Master Secret & Dual Credential Generation
+                  </div>
+                  <div style={{ fontSize: "0.84rem", color: "var(--text-main)", lineHeight: 1.6 }}>
+                    The client generates a 248-bit secret scalar <code style={{ color: "var(--accent-cyan-light)" }}>s</code> and two random credential preimages (<code style={{ color: "#34D399" }}>c_real</code>, <code style={{ color: "#FBBF24" }}>c_decoy</code>) in the BN254 scalar field:
+                    <div className="mono-box" style={{ marginTop: 8, fontSize: "0.75rem" }}>
+                      secret (s): {result.secret}<br/>
+                      c_real preimage: {result.real?.value}<br/>
+                      c_decoy preimage: {result.decoy?.value}
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <strong>Poseidon Algebraic Commitments:</strong>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", margin: "4px 0" }}>
+                        C_real = Poseidon(s, c_real)<br/>
+                        C_decoy = Poseidon(s, c_decoy)
+                      </div>
+                      Commitments to be committed on-chain:
+                      <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
+                        C_real:  {result.real?.commitment}<br/>
+                        C_decoy: {result.decoy?.commitment}
+                      </div>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                        * Note: Both commitments appear identical in structure and cannot be linked to the secret or voter.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div style={{ background: "rgba(0,0,0,0.35)", padding: "16px 20px", borderRadius: "var(--radius-sm)", borderLeft: "3px solid var(--accent-violet)" }}>
+                  <div style={{ fontWeight: 700, color: "var(--accent-violet-light)", fontSize: "0.95rem", marginBottom: 6 }}>
+                    Step 2: RSA Blinding Mechanism
+                  </div>
+                  <div style={{ fontSize: "0.84rem", color: "var(--text-main)", lineHeight: 1.6 }}>
+                    A random blinding factor <code style={{ color: "var(--accent-violet-light)" }}>r ∈ Z_N*</code> blinds each commitment before network transmission:
+                    <div className="mono-box" style={{ marginTop: 8, fontSize: "0.75rem" }}>
+                      Blinding Factor (r): {result.blindingFactor ? "0x" + result.blindingFactor : "Generated securely client-side"}<br/>
+                      Blinded Message (m' = C · r^e mod N): {result.blindedMessage ? "0x" + result.blindedMessage.slice(0, 48) + "..." : "Transmitted as random group element"}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                      <strong>Why this protects anonymity:</strong> The registrars receive only <code style={{ color: "var(--accent-violet-light)" }}>m'</code>, which is uniformly distributed over the RSA group. They <strong>never see plaintext commitments or secrets</strong> and have zero knowledge of who they are signing for.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div style={{ background: "rgba(0,0,0,0.35)", padding: "16px 20px", borderRadius: "var(--radius-sm)", borderLeft: "3px solid #F59E0B" }}>
+                  <div style={{ fontWeight: 700, color: "#FBBF24", fontSize: "0.95rem", marginBottom: 6 }}>
+                    Step 3: Distributed (2,3)-Threshold Registrar Selection
+                  </div>
+                  <div style={{ fontSize: "0.84rem", color: "var(--text-main)", lineHeight: 1.6 }}>
+                    Using round-robin rotation, <strong>2 independent registrars</strong> were contacted and 1 was skipped:
+                    <div style={{ display: "flex", gap: 12, marginTop: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      <span className="badge badge-green">
+                        Contacted: {result.registrarsUsed ? result.registrarsUsed.map(r => `Registrar ${r}`).join(" & ") : "Registrar 1 & 2"}
+                      </span>
+                      <span className="badge badge-amber">
+                        Skipped (Zero Knowledge): Registrar {result.registrarSkipped ?? 3}
+                      </span>
+                    </div>
+                    Each selected registrar computed a partial signature using its private Shamir share:
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", margin: "4px 0" }}>
+                      s_1 = (m')^(d_1) mod N, &nbsp;&nbsp; s_2 = (m')^(d_2) mod N
+                    </div>
+                    {result.partialSigs && result.partialSigs.length > 0 && (
+                      <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
+                        {result.partialSigs.map((p, i) => (
+                          <div key={i}>
+                            R{p.id} Partial Sig: 0x{p.sig.slice(0, 36)}...
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 4 */}
+                <div style={{ background: "rgba(0,0,0,0.35)", padding: "16px 20px", borderRadius: "var(--radius-sm)", borderLeft: "3px solid #10B981" }}>
+                  <div style={{ fontWeight: 700, color: "#34D399", fontSize: "0.95rem", marginBottom: 6 }}>
+                    Step 4: Lagrange Combination & Modular Unblinding
+                  </div>
+                  <div style={{ fontSize: "0.84rem", color: "var(--text-main)", lineHeight: 1.6 }}>
+                    The client combines the partial signatures using <strong>Lagrange interpolation</strong> coefficients without reconstructing the master key on any registrar:
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", margin: "4px 0" }}>
+                      s' = combine(s_1, s_2) &nbsp;&nbsp;[Composite Blind Signature]
+                    </div>
+                    Then unblinds the result by multiplying with the modular inverse of the blinding factor:
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "#34D399", margin: "4px 0" }}>
+                      s = s' · r^(-1) mod N
+                    </div>
+                    The voter now holds a mathematically valid signature over their unblinded commitment:
+                    <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
+                      Signature Verified under Master Public Key (N, e): s^e ≡ C (mod N) ✓<br/>
+                      {result.realFinalSig && (
+                        <span>Real RSA Sig: 0x{result.realFinalSig.slice(0, 48)}...</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 5 */}
+                <div style={{ background: "rgba(0,0,0,0.35)", padding: "16px 20px", borderRadius: "var(--radius-sm)", borderLeft: "3px solid #38BDF8" }}>
+                  <div style={{ fontWeight: 700, color: "#38BDF8", fontSize: "0.95rem", marginBottom: 6 }}>
+                    Step 5: Smart Contract On-Chain Commitment Insertion
+                  </div>
+                  <div style={{ fontSize: "0.84rem", color: "var(--text-main)", lineHeight: 1.6 }}>
+                    Both commitments (<code style={{ color: "#34D399" }}>C_real</code> and <code style={{ color: "#FBBF24" }}>C_decoy</code>) were inserted as leaves into the depth-10 Merkle tree in <code>VoterRegistry.sol</code>:
+                    <div className="mono-box" style={{ marginTop: 8, fontSize: "0.75rem" }}>
+                      Real Commitment Tx:  {result.txHashes?.[0] ? result.txHashes[0] : "Submitted on-chain"}<br/>
+                      Decoy Commitment Tx: {result.txHashes?.[1] ? result.txHashes[1] : "Submitted on-chain"}<br/>
+                      Updated Merkle Root: {result.merkleRoot || "0x..."}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <strong>Deterministic Public Nullifier (Prevents Double-Voting):</strong>
+                      <div className="mono-box" style={{ marginTop: 4, fontSize: "0.75rem", color: "#38BDF8" }}>
+                        Nullifier = Poseidon(secret, electionId) = {result.nullifier}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              Here is the exact step-by-step cryptographic pipeline executed for this voter. You can walk through each stage to explain the mathematics and coercion-resistance mechanism:
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Step 1 */}
-              <div style={{ background: "rgba(0,0,0,0.3)", padding: "14px 18px", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontWeight: 700, color: "var(--accent-cyan-light)", fontSize: "0.9rem", marginBottom: 4 }}>
-                  1. Scalar Generation (Private to Client)
-                </div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                  The client generates a 248-bit secret scalar <code>s</code> and two random scalars (<code>v_real</code>, <code>v_decoy</code>) in the BN254 scalar field:
-                  <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
-                    secret (s): {result.secret?.slice(0, 26)}...<br/>
-                    real value (v_real): {result.real?.value?.slice(0, 26)}...<br/>
-                    decoy value (v_decoy): {result.decoy?.value?.slice(0, 26)}...
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div style={{ background: "rgba(0,0,0,0.3)", padding: "14px 18px", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontWeight: 700, color: "#34D399", fontSize: "0.9rem", marginBottom: 4 }}>
-                  2. Poseidon Commitments: C = Poseidon(s, v)
-                </div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                  Both commitments are calculated using the algebraic Poseidon hash (zk-SNARK friendly):
-                  <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
-                    C_real:  {result.real?.commitment}<br/>
-                    C_decoy: {result.decoy?.commitment}
-                  </div>
-                  <em>Note: Both commitments appear identical in structure and cannot be linked to the secret or voter.</em>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div style={{ background: "rgba(0,0,0,0.3)", padding: "14px 18px", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontWeight: 700, color: "var(--accent-violet-light)", fontSize: "0.9rem", marginBottom: 4 }}>
-                  3. RSA Blinding: m' = m · r^e mod N
-                </div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                  A random blinding factor <code>r ∈ Z_N*</code> blinds each commitment before network transmission.
-                  Registrars <strong>only see random group elements</strong> and cannot know what they are signing.
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div style={{ background: "rgba(0,0,0,0.3)", padding: "14px 18px", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontWeight: 700, color: "#FBBF24", fontSize: "0.9rem", marginBottom: 4 }}>
-                  4. 2-of-3 Threshold Signing & Lagrange Interpolation
-                </div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                  Partial signatures <code>s_i = (m')^(d_i) mod N</code> were received from Registrars <strong>{result.registrarsUsed ? result.registrarsUsed.map(r => `R${r}`).join(" & ") : "R1 & R2"}</strong>.
-                  The client interpolated using Lagrange coefficients and multiplied by <code>r^(-1)</code> to recover the master RSA signature <code>S = m^d mod N</code> without any single server ever holding <code>d</code>.
-                </div>
-              </div>
-
-              {/* Step 5 */}
-              <div style={{ background: "rgba(0,0,0,0.3)", padding: "14px 18px", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontWeight: 700, color: "#38BDF8", fontSize: "0.9rem", marginBottom: 4 }}>
-                  5. On-Chain Merkle Tree & Nullifier Derivation
-                </div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                  Both commitments were submitted as leaves in <code>VoterRegistry.sol</code>.
-                  The public nullifier prevents double-voting:
-                  <div className="mono-box" style={{ marginTop: 6, fontSize: "0.75rem" }}>
-                    Nullifier = Hash(secret, electionId) = {result.nullifier}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
             <Link to="/vote" className="btn btn-cyan" style={{ padding: "12px 28px" }}>

@@ -79,6 +79,11 @@ router.post("/register", async (req, res) => {
       registrarsUsed:   result.registrarsUsed,
       registrarSkipped: result.registrarSkipped,
       txHashes:         result.txHashes,
+      blindingFactor:   result.blindingFactor,
+      blindedMessage:   result.blindedMessage,
+      partialSigs:      result.partialSigs,
+      realFinalSig:     result.realFinalSig,
+      merkleRoot:       result.merkleRoot,
       steps:            stepLog,
     });
   } catch (err) {

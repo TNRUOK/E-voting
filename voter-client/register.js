@@ -194,17 +194,25 @@ async function register(options) {
   logFn(`  On-chain: decoy commitment added (tx: ${tx2.hash.slice(0, 18)}...)`);
 
   const nullifier = computeNullifier(credPair.secret, electionId);
+  const currentRoot = await registry.root().catch(() => "0x0");
 
   return {
     real:             credPair.real,
     decoy:            credPair.decoy,
     secret:           credPair.secret,
-    realFinalSig,
-    decoyFinalSig,
+    realFinalSig:     realFinalSig.toString(16),
+    decoyFinalSig:    decoyFinalSig.toString(16),
     nullifier,
     registrarsUsed:   ids,
     registrarSkipped: skippedId,
     txHashes:         [tx1.hash, tx2.hash],
+    blindingFactor:   realBlinded.blindingFactor.toString(16),
+    blindedMessage:   realBlinded.blindedMessage.toString(16),
+    partialSigs: [
+      { id: ids[0], sig: realSig1.partialSig.toString(16) },
+      { id: ids[1], sig: realSig2.partialSig.toString(16) },
+    ],
+    merkleRoot:       currentRoot,
   };
 }
 
