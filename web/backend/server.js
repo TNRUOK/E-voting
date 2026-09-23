@@ -34,8 +34,9 @@ app.use(express.json());
 // ── Load routes ───────────────────────────────────────────────────────────────
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 
-app.use("/api/auth",       require("./routes/auth"));
-app.use("/api/voters",     require("./routes/voters"));
+app.use("/api/auth",        require("./routes/auth"));
+app.use("/api/eligibility", require("./routes/eligibility"));
+app.use("/api/voters",      require("./routes/voters"));
 app.use("/api/votes",      require("./routes/votes"));
 app.use("/api/tally",      require("./routes/tally"));
 app.use("/api/registrars", require("./routes/registrars"));

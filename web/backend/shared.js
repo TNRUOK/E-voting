@@ -67,6 +67,14 @@ function getVoting(signer) {
   return new ethers.Contract(dep.Voting, loadAbi("Voting"), signer || provider);
 }
 
+function getEligibilityRegistry(signer) {
+  const dep = getDeployed();
+  if (!dep.EligibilityRegistry) {
+    throw new Error("EligibilityRegistry address not found in deployed.json. Run deploy first.");
+  }
+  return new ethers.Contract(dep.EligibilityRegistry, loadAbi("EligibilityRegistry"), signer || provider);
+}
+
 // In-memory registrar request counters (reset on server restart — by design)
 const registrarCounters = { 1: 0, 2: 0, 3: 0 };
 function incrementCounter(id) { registrarCounters[id] = (registrarCounters[id] || 0) + 1; }
@@ -82,9 +90,11 @@ module.exports = {
   getSigner,
   getRegistry,
   getVoting,
+  getEligibilityRegistry,
   registrarCounters,
   incrementCounter,
   commitmentMeta,
   auditVotes,
   REGISTRAR_URLS: ["http://localhost:3001", "http://localhost:3002", "http://localhost:3003"],
+  REGISTRAR_API_KEY: process.env.REGISTRAR_API_KEY || "dev_registrar_secret_key_123",
 };

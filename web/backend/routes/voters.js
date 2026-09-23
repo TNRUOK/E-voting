@@ -1,6 +1,6 @@
 "use strict";
 const router = require("express").Router();
-const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, REGISTRAR_URLS, commitmentMeta } = require("../shared");
+const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, REGISTRAR_URLS, REGISTRAR_API_KEY, commitmentMeta } = require("../shared");
 const { register } = require("../../../voter-client/register");
 const { hexToBigInt } = require("../../../registrar-service/crypto/rsa-blind");
 const { MerkleTree } = require("../../../voter-client/merkle");
@@ -36,13 +36,14 @@ router.post("/register", async (req, res) => {
     const currentVoterIndex = voterIndex++;
 
     const result = await register({
-      registrarUrls: REGISTRAR_URLS,
-      publicKey: { N, e },
-      provider:    signer.provider,
+      registrarUrls:   REGISTRAR_URLS,
+      publicKey:       { N, e },
+      provider:        signer.provider,
       signer,
-      registryAddr: DEPLOYED.VoterRegistry,
-      electionId:   DEPLOYED.electionId,
-      voterIndex:   currentVoterIndex,
+      registryAddr:    DEPLOYED.VoterRegistry,
+      electionId:      DEPLOYED.electionId,
+      voterIndex:      currentVoterIndex,
+      registrarApiKey: REGISTRAR_API_KEY,
       logFn,
     });
 

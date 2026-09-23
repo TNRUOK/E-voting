@@ -74,10 +74,13 @@ function selectRegistrarPair(registrarUrls, voterIndex) {
 /**
  * requestPartialSignature(registrarUrl, blindedMessage) → { partialSig, signerIndex }
  */
-async function requestPartialSignature(registrarUrl, blindedMessage) {
-  const response = await axios.post(`${registrarUrl}/sign`, {
-    blindedMessage: bigIntToHex(blindedMessage),
-  });
+async function requestPartialSignature(registrarUrl, blindedMessage, apiKey) {
+  const key = apiKey || process.env.REGISTRAR_API_KEY || "dev_registrar_secret_key_123";
+  const response = await axios.post(
+    `${registrarUrl}/sign`,
+    { blindedMessage: bigIntToHex(blindedMessage) },
+    { headers: { "x-registrar-key": key } }
+  );
   return {
     partialSig:  hexToBigInt(response.data.partialSig),
     shareValue:  hexToBigInt(response.data.shareValue),
@@ -138,12 +141,12 @@ async function register(options) {
   // We send BOTH real and decoy blinded messages to BOTH registrars.
   // Registrars sign both without knowing which is real.
   const [realSig1, realSig2] = await Promise.all([
-    requestPartialSignature(urls[0], realBlinded.blindedMessage),
-    requestPartialSignature(urls[1], realBlinded.blindedMessage),
+    requestPartialSignature(urls[0], realBlinded.blindedMessage, options.registrarApiKey),
+    requestPartialSignature(urls[1], realBlinded.blindedMessage, options.registrarApiKey),
   ]);
   const [decoySig1, decoySig2] = await Promise.all([
-    requestPartialSignature(urls[0], decoyBlinded.blindedMessage),
-    requestPartialSignature(urls[1], decoyBlinded.blindedMessage),
+    requestPartialSignature(urls[0], decoyBlinded.blindedMessage, options.registrarApiKey),
+    requestPartialSignature(urls[1], decoyBlinded.blindedMessage, options.registrarApiKey),
   ]);
 
   logFn(`  Received partial signatures from registrars ${ids[0]} and ${ids[1]}`);
@@ -185,11 +188,21 @@ async function register(options) {
   const registryAbi = loadAbi("VoterRegistry");
   const registry    = new ethers.Contract(registryAddr, registryAbi, signer);
 
-  const tx1 = await registry.addLeaf(credPair.real.commitment);
+  // Helper to serialize BigInt signature to padded hex bytes
+  const bigIntToBytes = (bn, byteLen = 256) => {
+    let h = bn.toString(16);
+    if (h.length % 2 !== 0) h = "0" + h;
+    return "0x" + h.padStart(byteLen * 2, "0");
+  };
+
+  const realSigBytes = bigIntToBytes(realFinalSig, 256);
+  const decoySigBytes = bigIntToBytes(decoyFinalSig, 256);
+
+  const tx1 = await registry.addLeaf(credPair.real.commitment, realSigBytes);
   await tx1.wait();
   logFn(`  On-chain: real commitment added (tx: ${tx1.hash.slice(0, 18)}...)`);
 
-  const tx2 = await registry.addLeaf(credPair.decoy.commitment);
+  const tx2 = await registry.addLeaf(credPair.decoy.commitment, decoySigBytes);
   await tx2.wait();
   logFn(`  On-chain: decoy commitment added (tx: ${tx2.hash.slice(0, 18)}...)`);
 

@@ -31,6 +31,10 @@ contract VoterRegistry {
     // ── State ────────────────────────────────────────────────────────────────
     address public owner;
 
+    // RSA Public Key for on-chain threshold signature verification
+    bytes public rsaModulus;
+    bytes public rsaExponent;
+
     // frontier[i] = the hash of the subtree of height i that is currently
     // "complete" (all leaves filled) on the rightmost side.
     bytes32[DEPTH] public frontier;
@@ -47,15 +51,21 @@ contract VoterRegistry {
     // ── Events ───────────────────────────────────────────────────────────────
     event LeafAdded(uint256 indexed index, bytes32 commitment, bytes32 newRoot);
 
-    // ── Modifiers ────────────────────────────────────────────────────────────
+    // ── Modifiers ────────────────────────────────────────────────────
     modifier onlyOwner() {
         require(msg.sender == owner, "VoterRegistry: not owner");
         _;
     }
 
     // ── Constructor ──────────────────────────────────────────────────────────
-    constructor() {
+    /**
+     * @param _N Threshold RSA modulus (big-endian bytes, typically 2048-bit / 256 bytes)
+     * @param _e Threshold RSA public exponent (big-endian bytes, typically 0x010001 = 65537)
+     */
+    constructor(bytes memory _N, bytes memory _e) {
         owner = msg.sender;
+        rsaModulus = _N;
+        rsaExponent = _e;
         // Initialise root to the hash of an all-zero tree of depth DEPTH
         root = _zeros(DEPTH);
     }
@@ -64,12 +74,22 @@ contract VoterRegistry {
 
     /**
      * @notice Add a new voter credential commitment as a leaf.
-     * @dev Called by the backend after threshold blind-signature verification
-     *      completes and the credential has been validated.
-     * @param commitment  Poseidon(secret, credential) computed off-chain by voter.
+     * @dev Replaces single-owner wallet trust with on-chain RSA threshold signature
+     *      verification via the EVM MODEXP precompile (address 0x05). The commitment
+     *      is only added if accompanied by a mathematically valid RSA signature under
+     *      the election's threshold public key (N, e). No off-chain party needs to be
+     *      trusted for this check.
+     * @param commitment Poseidon(secret, credential) commitment to be added.
+     * @param signature  2048-bit threshold RSA blind signature unblinded by voter.
      */
-    function addLeaf(bytes32 commitment) external onlyOwner returns (bytes32 newRoot) {
+    function addLeaf(bytes32 commitment, bytes calldata signature) external returns (bytes32 newRoot) {
         require(leafCount < MAX_LEAVES, "VoterRegistry: tree full");
+
+        // Verify RSA threshold signature on-chain:
+        // messageInt = uint256(sha256(abi.encodePacked(commitment)))
+        // signature^e mod N == messageInt
+        uint256 messageInt = uint256(sha256(abi.encodePacked(commitment)));
+        require(_rsaVerify(signature, messageInt), "VoterRegistry: invalid threshold signature");
 
         // Insert using the incremental Merkle tree algorithm
         uint256 index = leafCount;
@@ -104,6 +124,74 @@ contract VoterRegistry {
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
+
+    /**
+     * @dev Verify an RSA signature against the stored modulus and exponent using
+     *      the EVM MODEXP precompile at address 0x05 (EIP-198).
+     *      Layout of MODEXP input: [base_len (32), exp_len (32), mod_len (32), base, exp, mod]
+     *      Output: (base^exp) % mod formatted as big-endian bytes of length mod_len.
+     */
+    function _rsaVerify(bytes calldata signature, uint256 messageInt) internal view returns (bool) {
+        if (signature.length == 0 || rsaModulus.length == 0 || rsaExponent.length == 0) {
+            return false;
+        }
+
+        bytes memory input = abi.encodePacked(
+            uint256(signature.length),
+            uint256(rsaExponent.length),
+            uint256(rsaModulus.length),
+            signature,
+            rsaExponent,
+            rsaModulus
+        );
+
+        bytes memory output = new bytes(rsaModulus.length);
+        bool success;
+        assembly {
+            success := staticcall(
+                gas(),
+                0x05,
+                add(input, 32),
+                mload(input),
+                add(output, 32),
+                mload(output)
+            )
+        }
+        if (!success) {
+            return false;
+        }
+
+        uint256 modLen = rsaModulus.length;
+        if (modLen < 32) {
+            return false;
+        }
+
+        // Compare last 32 bytes to messageInt
+        uint256 result;
+        assembly {
+            result := mload(add(add(output, 32), sub(modLen, 32)))
+        }
+        if (result != messageInt) {
+            return false;
+        }
+
+        // Verify that all high-order bytes prior to the last 32 bytes are zero
+        uint256 prefixLen = modLen - 32;
+        for (uint256 i = 0; i < prefixLen; i += 32) {
+            uint256 chunk;
+            assembly {
+                chunk := mload(add(add(output, 32), i))
+            }
+            if (i + 32 > prefixLen) {
+                uint256 shift = (32 - (prefixLen - i)) * 8;
+                if ((chunk >> shift) != 0) return false;
+            } else {
+                if (chunk != 0) return false;
+            }
+        }
+
+        return true;
+    }
 
     /**
      * @dev Hash two child nodes. We use keccak256 here to match the off-chain

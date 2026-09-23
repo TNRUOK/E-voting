@@ -225,3 +225,25 @@ As an academic course project demonstrating threshold cryptography and zero-know
 1. **Standard 2048-bit RSA:** Shoup's theoretical security proof relies on safe primes ($p = 2p'+1$, $q = 2q'+1$). Standard RSA primes are used here to avoid long keygen delays during local live demonstrations.
 2. **Local Multi-Process Architecture:** In a production municipal election, the 3 registrars would run on physically distinct servers operated by independent non-colluding institutions. Here they are simulated as independent node processes on separate ports.
 3. **Off-Chain Groth16 Pre-Verification:** The backend pre-verifies the zk-SNARK proof before relaying to `Voting.sol`. The smart contract strictly enforces nullifier deduplication and Merkle root freshness on-chain, preventing double-voting and replay attacks at the consensus layer.
+
+---
+
+## 10. Security Enhancements (Beyond Base Paper)
+
+The following three security properties were implemented as structured improvements to close identified attack vectors:
+
+### (a) Anonymous Eligibility Gate — GAP 1
+**Problem:** Anyone could call `POST /api/voters/register` unlimited times to mint unlimited voting credentials.  
+**Fix:** A new `EligibilityRegistry.sol` (depth-10 incremental Merkle tree) stores one-time enrollment commitments issued by an administrator after identity verification. Before the threshold blind-signing flow begins, the voter client must call `POST /api/eligibility/claim` with a zero-knowledge proof (`eligibility.circom`) that they know an enrollment secret committed in the tree.  
+A **domain-separated nullifier** `Poseidon(enrollmentSecret, electionId, 1)` is recorded on-chain by `EligibilityRegistry.claimEligibility()` to prevent the same eligible voter from claiming eligibility more than once.  
+*Simplification:* For demonstration purposes the enrollment secret is generated server-side and returned once to the client; in production it would be generated and blinded client-side alongside a KYC credential.
+
+### (b) On-Chain RSA Signature Verification — GAP 2
+**Problem:** `VoterRegistry.addLeaf()` used `onlyOwner` — anyone holding the backend deploy key could insert arbitrary commitments, bypassing registrars entirely.  
+**Fix:** The `onlyOwner` guard was replaced with **EVM MODEXP precompile verification** (address `0x05`, EIP-198). `addLeaf(bytes32 commitment, bytes calldata signature)` now verifies on-chain that `signature^e mod N == sha256(abi.encodePacked(commitment))`, proving the commitment passed through the 2-of-3 threshold blind-signing flow. The RSA public key `(N, e)` is stored immutably in the contract at deploy time.  
+A companion hash compatibility test (`test/hash-compat.test.js`) asserts byte-level equivalence between the JS `hashToInt()` and Solidity's `sha256(abi.encodePacked(...))`.
+
+### (c) Registrar API Key Gate — GAP 3
+**Problem:** The registrar `POST /sign` endpoints were entirely unauthenticated — any process could obtain partial RSA signatures by hitting the registrar ports directly.  
+**Fix:** Each registrar now validates a shared secret header `x-registrar-key` against `process.env.REGISTRAR_API_KEY` (default: `dev_registrar_secret_key_123`). Requests missing the header or supplying the wrong key receive `HTTP 401`. The voter client (`voter-client/register.js`) and backend (`web/backend/routes/voters.js`) pass this key on every signing request.  
+*Simplification:* A shared symmetric secret is a lightweight stand-in for mutual TLS client certificates which would be used in a production deployment.

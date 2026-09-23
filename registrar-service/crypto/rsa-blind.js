@@ -77,7 +77,15 @@ function modInverse(a, m) {
  * This ensures |msg| < N for 2048-bit keys (256-bit hash << 2048-bit modulus).
  */
 function hashToInt(data) {
-  const buf = crypto.createHash("sha256").update(data).digest();
+  let bufInput;
+  if (Buffer.isBuffer(data)) {
+    bufInput = data;
+  } else if (typeof data === "string" && data.startsWith("0x")) {
+    bufInput = Buffer.from(data.slice(2), "hex");
+  } else {
+    bufInput = Buffer.from(String(data));
+  }
+  const buf = crypto.createHash("sha256").update(bufInput).digest();
   return BigInt("0x" + buf.toString("hex"));
 }
 

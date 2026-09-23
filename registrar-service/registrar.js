@@ -110,7 +110,14 @@ app.get("/status", (req, res) => {
  * though these are blinded, logging creates an audit trail that could be
  * correlated by a compromised registrar operator.
  */
+const REGISTRAR_API_KEY = process.env.REGISTRAR_API_KEY || "dev_registrar_secret_key_123";
+
 app.post("/sign", (req, res) => {
+  const clientKey = req.headers["x-registrar-key"];
+  if (clientKey !== REGISTRAR_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized: Invalid or missing x-registrar-key header" });
+  }
+
   const { blindedMessage } = req.body;
 
   if (!blindedMessage) {
