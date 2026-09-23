@@ -4,7 +4,7 @@ const fs   = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
 const { requireAuth, requireAdmin } = require("../middleware/auth");
-const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, getVoting, getEligibilityRegistry, registrarCounters, commitmentMeta, auditVotes } = require("../shared");
+const { getDeployed, getPublicKey, getSigner, getRegistry, getVoting, getEligibilityRegistry, registrarCounters, commitmentMeta, auditVotes } = require("../shared");
 const { randomScalar } = require("../../../voter-client/credential");
 
 const USERS_FILE = path.join(__dirname, "../data/users.json");
@@ -24,9 +24,11 @@ router.use(requireAuth, requireAdmin);
  */
 router.get("/audit", async (req, res) => {
   try {
-    const signer = await getSigner();
+    const dep      = getDeployed();
+    const pub      = getPublicKey();
+    const signer   = await getSigner();
     const registry = getRegistry(signer);
-    const voting = getVoting(signer);
+    const voting   = getVoting(signer);
 
     // Fetch on-chain leaves
     let leaves = [];
@@ -59,7 +61,7 @@ router.get("/audit", async (req, res) => {
     const officialTally = candidateNames.map((name, i) => ({
       name,
       votes: Number(counts[i]),
-      color: DEPLOYED.candidates?.[i]?.color || "#7C3AED",
+      color: dep.candidates?.[i]?.color || "#7C3AED",
     }));
 
     res.json({
@@ -79,11 +81,11 @@ router.get("/audit", async (req, res) => {
       officialTally,
       registrarCounters,
       publicKey: {
-        N: PUBLIC_KEY.N,
-        e: PUBLIC_KEY.e,
+        N: pub.N,
+        e: pub.e,
         scheme: "2-of-3 Shamir Threshold RSA",
       },
-      electionId: DEPLOYED.electionId,
+      electionId: dep.electionId,
     });
   } catch (err) {
     console.error("[/api/admin/audit]", err.message);
@@ -105,13 +107,14 @@ router.post("/clear-audit", (req, res) => {
  * Admin use only — for the Voter Enrollment management panel.
  */
 router.get("/voters", (req, res) => {
+  const dep   = getDeployed();
   const users = readUsers();
   const list = Object.values(users).map(u => ({
     username:      u.username,
     role:          u.role,
-    enrolled:      !!u.enrolled,
+    enrolled:      !!(u.enrolled && (!u.enrolledElectionId || u.enrolledElectionId === dep.electionId)),
     enrolledAt:    u.enrolledAt || null,
-    hasRegistered: !!u.hasRegistered,
+    hasRegistered: !!(u.hasRegistered && u.registeredElectionId === dep.electionId),
     registeredAt:  u.registeredAt || null,
     createdAt:     u.createdAt  || null,
   }));
@@ -123,14 +126,10 @@ router.get("/voters", (req, res) => {
  * Admin manually enrolls a voter account by generating an enrollment secret,
  * adding its commitment to EligibilityRegistry.sol, and returning the secret
  * to be passed to the voter (or shown in-UI for demo purposes).
- *
- * DOCUMENTED SIMPLIFICATION: In a real deployment the admin would verify a
- * government-issued KYC credential, and the voter would generate their own
- * enrollmentSecret client-side. The secret is generated here server-side and
- * returned once for course-project demo convenience.
  */
 router.post("/enroll/:username", async (req, res) => {
   try {
+    const dep      = getDeployed();
     const username = req.params.username.toLowerCase();
     const users    = readUsers();
     const user     = users[username];
@@ -138,8 +137,8 @@ router.post("/enroll/:username", async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: `User "${username}" not found.` });
     }
-    if (user.enrolled) {
-      return res.status(400).json({ error: `"${username}" is already enrolled.` });
+    if (user.enrolled && (!user.enrolledElectionId || user.enrolledElectionId === dep.electionId)) {
+      return res.status(400).json({ error: `"${username}" is already enrolled for this election.` });
     }
 
     // 1. Generate enrollment secret and commitment
@@ -153,9 +152,14 @@ router.post("/enroll/:username", async (req, res) => {
     const receipt  = await tx.wait();
     const leafIndex = Number(await registry.leafCount()) - 1;
 
-    // 3. Mark user enrolled (do NOT persist enrollmentSecret in the store)
-    user.enrolled   = true;
-    user.enrolledAt = new Date().toISOString();
+    // 3. Mark user enrolled for current election (clear any stale old credentials)
+    user.enrolled           = true;
+    user.enrolledElectionId = dep.electionId;
+    user.enrolledAt         = new Date().toISOString();
+    if (user.registeredElectionId !== dep.electionId) {
+      user.hasRegistered = false;
+      user.credential    = null;
+    }
     writeUsers(users);
 
     return res.json({

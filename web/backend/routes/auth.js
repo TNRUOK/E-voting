@@ -130,20 +130,26 @@ router.post("/login", loginLimiter, async (req, res) => {
   }
 });
 
+const { getDeployed } = require("../shared");
+
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get("/me", requireAuth, (req, res) => {
   const users = readUsers();
   const user  = users[req.user.username.toLowerCase()];
   if (!user) return res.status(404).json({ error: "User not found." });
 
+  const dep = getDeployed();
+  const isEnrolledForElection = !!user.enrolled && (!user.enrolledElectionId || user.enrolledElectionId === dep.electionId);
+  const isRegisteredForElection = !!user.hasRegistered && user.registeredElectionId === dep.electionId;
+
   res.json({
     username:      user.username,
     role:          user.role,
-    enrolled:      !!user.enrolled,
+    enrolled:      isEnrolledForElection,
     enrolledAt:    user.enrolledAt || null,
-    hasRegistered: !!user.hasRegistered,
+    hasRegistered: isRegisteredForElection,
     registeredAt:  user.registeredAt || null,
-    credential:    user.credential || null,
+    credential:    isRegisteredForElection ? (user.credential || null) : null,
   });
 });
 

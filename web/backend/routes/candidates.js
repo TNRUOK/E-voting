@@ -2,13 +2,14 @@
 const router = require("express").Router();
 const fs = require("fs");
 const path = require("path");
-const { DEPLOYED } = require("../shared");
+const { getDeployed } = require("../shared");
 
 const CANDIDATES_FILE = path.join(__dirname, "../../../config/candidates.json");
 
 /** GET /api/candidates — returns candidate list */
 router.get("/", (req, res) => {
-  let candidates = DEPLOYED?.candidates;
+  const dep = getDeployed();
+  let candidates = dep?.candidates;
   if ((!candidates || candidates.length === 0) && fs.existsSync(CANDIDATES_FILE)) {
     try {
       candidates = JSON.parse(fs.readFileSync(CANDIDATES_FILE, "utf8"));
@@ -16,7 +17,7 @@ router.get("/", (req, res) => {
       candidates = [];
     }
   }
-  res.json({ success: true, candidates: candidates || [], electionId: DEPLOYED?.electionId });
+  res.json({ success: true, candidates: candidates || [], electionId: dep?.electionId });
 });
 
 /** POST /api/candidates — add a new candidate to config/candidates.json */

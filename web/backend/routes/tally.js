@@ -1,6 +1,6 @@
 "use strict";
 const router   = require("express").Router();
-const { getVoting, DEPLOYED } = require("../shared");
+const { getVoting, getDeployed } = require("../shared");
 
 /**
  * GET /api/tally
@@ -8,9 +8,10 @@ const { getVoting, DEPLOYED } = require("../shared");
  */
 router.get("/", async (req, res) => {
   try {
+    const dep = getDeployed();
     const voting = getVoting();
     const [names, counts] = await voting.getTally();
-    const candidates = DEPLOYED.candidates || [];
+    const candidates = dep.candidates || [];
 
     const tally = names.map((name, i) => ({
       name,

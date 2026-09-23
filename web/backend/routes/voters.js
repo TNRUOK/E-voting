@@ -2,7 +2,7 @@
 const router = require("express").Router();
 const fs     = require("fs");
 const path   = require("path");
-const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, REGISTRAR_URLS, REGISTRAR_API_KEY, commitmentMeta } = require("../shared");
+const { getDeployed, getPublicKey, getSigner, getRegistry, REGISTRAR_URLS, REGISTRAR_API_KEY, commitmentMeta } = require("../shared");
 const { register } = require("../../../voter-client/register");
 const { hexToBigInt } = require("../../../registrar-service/crypto/rsa-blind");
 const { MerkleTree } = require("../../../voter-client/merkle");
@@ -43,16 +43,21 @@ router.post("/register", requireAuth, async (req, res) => {
     });
   }
 
-  // 1. Must be verified and enrolled by administrator
-  if (!user.enrolled) {
+  const dep = getDeployed();
+  const pub = getPublicKey();
+
+  // 1. Must be verified and enrolled by administrator for current election
+  const isEnrolled = !!user.enrolled && (!user.enrolledElectionId || user.enrolledElectionId === dep.electionId);
+  if (!isEnrolled) {
     return res.status(403).json({
       success: false,
-      error: "Account not enrolled. An administrator must verify your identity in the Admin portal before you can obtain voting credentials."
+      error: "Account not enrolled for this election. An administrator must verify your identity in the Admin portal before you can obtain voting credentials."
     });
   }
 
-  // 2. Strict 1-credential-per-account limit
-  if (user.hasRegistered) {
+  // 2. Strict 1-credential-per-account limit for current election
+  const isAlreadyRegistered = !!user.hasRegistered && user.registeredElectionId === dep.electionId;
+  if (isAlreadyRegistered) {
     return res.status(403).json({
       success: false,
       error: "You have already generated a voter credential for this election. Multiple voter IDs per account are strictly prohibited."
@@ -66,8 +71,8 @@ router.post("/register", requireAuth, async (req, res) => {
 
   try {
     const signer = await getSigner();
-    const N = hexToBigInt(PUBLIC_KEY.N);
-    const e = hexToBigInt(PUBLIC_KEY.e);
+    const N = hexToBigInt(pub.N);
+    const e = hexToBigInt(pub.e);
 
     const currentVoterIndex = voterIndex++;
 
@@ -76,8 +81,8 @@ router.post("/register", requireAuth, async (req, res) => {
       publicKey:       { N, e },
       provider:        signer.provider,
       signer,
-      registryAddr:    DEPLOYED.VoterRegistry,
-      electionId:      DEPLOYED.electionId,
+      registryAddr:    dep.VoterRegistry,
+      electionId:      dep.electionId,
       voterIndex:      currentVoterIndex,
       registrarApiKey: REGISTRAR_API_KEY,
       logFn,
@@ -107,10 +112,11 @@ router.post("/register", requireAuth, async (req, res) => {
       };
     }
 
-    // Lock account against any future credential generation
-    user.hasRegistered = true;
-    user.registeredAt  = new Date().toISOString();
-    user.credential    = {
+    // Lock account against any future credential generation for this election
+    user.hasRegistered        = true;
+    user.registeredElectionId = dep.electionId;
+    user.registeredAt         = new Date().toISOString();
+    user.credential           = {
       real:             { commitment: result.real.commitment, value: result.real.value },
       decoy:            { commitment: result.decoy.commitment, value: result.decoy.value },
       secret:           result.secret,
@@ -118,6 +124,7 @@ router.post("/register", requireAuth, async (req, res) => {
       registrarsUsed:   result.registrarsUsed,
       registrarSkipped: result.registrarSkipped,
       txHashes:         result.txHashes,
+      electionId:       dep.electionId,
       registeredAt:     user.registeredAt,
     };
     writeUsers(users);

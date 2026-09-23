@@ -84,6 +84,8 @@ const commitmentMeta = {}; // commitment.toLowerCase() -> { type: 'real'|'decoy'
 const auditVotes = [];     // Array of { id, type: 'real'|'decoy', voterName, candidate, candidateIndex, nullifier, commitment, txHash, timestamp, blockNumber }
 
 module.exports = {
+  getDeployed,
+  getPublicKey,
   get DEPLOYED() { return getDeployed(); },
   get PUBLIC_KEY() { return getPublicKey(); },
   provider,

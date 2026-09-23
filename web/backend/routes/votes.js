@@ -1,6 +1,6 @@
 "use strict";
 const router = require("express").Router();
-const { DEPLOYED, getSigner, getRegistry, getVoting, commitmentMeta, auditVotes } = require("../shared");
+const { getDeployed, getSigner, getRegistry, getVoting, commitmentMeta, auditVotes } = require("../shared");
 const { generateProof, verifyProof } = require("../../../voter-client/zkprove");
 const { MerkleTree } = require("../../../voter-client/merkle");
 const { ethers } = require("ethers");
@@ -30,6 +30,7 @@ router.post("/cast", async (req, res) => {
   }
 
   try {
+    const dep      = getDeployed();
     const signer   = await getSigner();
     const registry = getRegistry(signer);
     const voting   = getVoting(signer);
@@ -41,7 +42,10 @@ router.post("/cast", async (req, res) => {
     // Find leaf index
     const leafIndex = leaves.findIndex(l => l.toLowerCase() === commitment.toLowerCase());
     if (leafIndex === -1) {
-      return res.status(400).json({ success: false, error: "Commitment not found in Merkle tree — are you registered?" });
+      return res.status(400).json({
+        success: false,
+        error: "Commitment not found in Merkle tree — are you registered for this election? (Current tree has " + leaves.length + " registered leaves)."
+      });
     }
 
     const { pathElements, pathIndices, root } = tree.getMerklePath(leafIndex);
@@ -58,7 +62,7 @@ router.post("/cast", async (req, res) => {
       pathElements,
       pathIndices,
       root,
-      electionId: DEPLOYED.electionId,
+      electionId: dep.electionId,
     });
 
     // Verify proof
@@ -73,7 +77,7 @@ router.post("/cast", async (req, res) => {
 
     // Determine if this vote used a real or decoy credential
     const meta = commitmentMeta[commitment.toLowerCase()];
-    const candidates = DEPLOYED.candidates || [];
+    const candidates = dep.candidates || [];
     const candidateName = candidates[candidateIndex]?.name || `Candidate #${candidateIndex + 1}`;
 
     const voteType = meta?.type || (req.body.isReal === false ? "decoy" : "real");
