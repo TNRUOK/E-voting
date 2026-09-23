@@ -426,6 +426,7 @@ export default function Admin() {
                     <th style={{ padding: "14px 18px" }}>Username</th>
                     <th style={{ padding: "14px 18px" }}>Role</th>
                     <th style={{ padding: "14px 18px" }}>Enrollment Status</th>
+                    <th style={{ padding: "14px 18px" }}>Credential Status</th>
                     <th style={{ padding: "14px 18px" }}>Enrolled At</th>
                     <th style={{ padding: "14px 18px" }}>Action</th>
                   </tr>
@@ -447,6 +448,17 @@ export default function Admin() {
                             <span className="badge badge-green" style={{ fontSize: "0.72rem", padding: "3px 10px" }}>✓ Enrolled</span>
                           ) : (
                             <span style={{ fontSize: "0.78rem", color: "#F87171" }}>✗ Not Enrolled</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          {v.role === "admin" ? (
+                            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>N/A (admin)</span>
+                          ) : v.hasRegistered ? (
+                            <span className="badge badge-purple" style={{ fontSize: "0.72rem", padding: "3px 8px" }}>✓ Issued (1 of 1)</span>
+                          ) : v.enrolled ? (
+                            <span style={{ fontSize: "0.78rem", color: "var(--accent-cyan-light)" }}>⏳ Awaiting Issuance</span>
+                          ) : (
+                            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Locked (not enrolled)</span>
                           )}
                         </td>
                         <td style={{ padding: "14px 18px", fontSize: "0.78rem", color: "var(--text-dim)" }}>
@@ -473,7 +485,7 @@ export default function Admin() {
                       </tr>
                       {enrollResult[v.username] && (
                         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: enrollResult[v.username].success ? "rgba(16,185,129,0.05)" : "rgba(239,68,68,0.05)" }}>
-                          <td colSpan={5} style={{ padding: "12px 18px" }}>
+                          <td colSpan={6} style={{ padding: "12px 18px" }}>
                             {enrollResult[v.username].error ? (
                               <div style={{ color: "#F87171", fontSize: "0.82rem" }}>❌ {enrollResult[v.username].error}</div>
                             ) : (

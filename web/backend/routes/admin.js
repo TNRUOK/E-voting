@@ -107,11 +107,13 @@ router.post("/clear-audit", (req, res) => {
 router.get("/voters", (req, res) => {
   const users = readUsers();
   const list = Object.values(users).map(u => ({
-    username:   u.username,
-    role:       u.role,
-    enrolled:   !!u.enrolled,
-    enrolledAt: u.enrolledAt || null,
-    createdAt:  u.createdAt  || null,
+    username:      u.username,
+    role:          u.role,
+    enrolled:      !!u.enrolled,
+    enrolledAt:    u.enrolledAt || null,
+    hasRegistered: !!u.hasRegistered,
+    registeredAt:  u.registeredAt || null,
+    createdAt:     u.createdAt  || null,
   }));
   res.json({ success: true, voters: list });
 });

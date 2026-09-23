@@ -132,7 +132,19 @@ router.post("/login", loginLimiter, async (req, res) => {
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get("/me", requireAuth, (req, res) => {
-  res.json({ username: req.user.username, role: req.user.role });
+  const users = readUsers();
+  const user  = users[req.user.username.toLowerCase()];
+  if (!user) return res.status(404).json({ error: "User not found." });
+
+  res.json({
+    username:      user.username,
+    role:          user.role,
+    enrolled:      !!user.enrolled,
+    enrolledAt:    user.enrolledAt || null,
+    hasRegistered: !!user.hasRegistered,
+    registeredAt:  user.registeredAt || null,
+    credential:    user.credential || null,
+  });
 });
 
 module.exports = router;
