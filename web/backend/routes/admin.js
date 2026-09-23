@@ -1,7 +1,15 @@
 "use strict";
 const router = require("express").Router();
+const fs   = require("fs");
+const path = require("path");
+const { ethers } = require("ethers");
 const { requireAuth, requireAdmin } = require("../middleware/auth");
-const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, getVoting, registrarCounters, commitmentMeta, auditVotes } = require("../shared");
+const { DEPLOYED, PUBLIC_KEY, getSigner, getRegistry, getVoting, getEligibilityRegistry, registrarCounters, commitmentMeta, auditVotes } = require("../shared");
+const { randomScalar } = require("../../../voter-client/credential");
+
+const USERS_FILE = path.join(__dirname, "../data/users.json");
+function readUsers()       { try { return JSON.parse(fs.readFileSync(USERS_FILE, "utf8") || "{}"); } catch { return {}; } }
+function writeUsers(users) { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf8"); }
 
 // Protect all admin routes
 router.use(requireAuth, requireAdmin);
@@ -89,6 +97,77 @@ router.get("/audit", async (req, res) => {
 router.post("/clear-audit", (req, res) => {
   auditVotes.length = 0;
   res.json({ success: true, message: "Audit logs cleared" });
+});
+
+/**
+ * GET /api/admin/voters
+ * Returns all registered user accounts with their enrollment status.
+ * Admin use only — for the Voter Enrollment management panel.
+ */
+router.get("/voters", (req, res) => {
+  const users = readUsers();
+  const list = Object.values(users).map(u => ({
+    username:   u.username,
+    role:       u.role,
+    enrolled:   !!u.enrolled,
+    enrolledAt: u.enrolledAt || null,
+    createdAt:  u.createdAt  || null,
+  }));
+  res.json({ success: true, voters: list });
+});
+
+/**
+ * POST /api/admin/enroll/:username
+ * Admin manually enrolls a voter account by generating an enrollment secret,
+ * adding its commitment to EligibilityRegistry.sol, and returning the secret
+ * to be passed to the voter (or shown in-UI for demo purposes).
+ *
+ * DOCUMENTED SIMPLIFICATION: In a real deployment the admin would verify a
+ * government-issued KYC credential, and the voter would generate their own
+ * enrollmentSecret client-side. The secret is generated here server-side and
+ * returned once for course-project demo convenience.
+ */
+router.post("/enroll/:username", async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const users    = readUsers();
+    const user     = users[username];
+
+    if (!user) {
+      return res.status(404).json({ error: `User "${username}" not found.` });
+    }
+    if (user.enrolled) {
+      return res.status(400).json({ error: `"${username}" is already enrolled.` });
+    }
+
+    // 1. Generate enrollment secret and commitment
+    const enrollmentSecret = randomScalar();
+    const commitment       = ethers.keccak256(enrollmentSecret);
+
+    // 2. Add commitment leaf to EligibilityRegistry on-chain
+    const signer   = await getSigner();
+    const registry = getEligibilityRegistry(signer);
+    const tx       = await registry.addLeaf(commitment);
+    const receipt  = await tx.wait();
+    const leafIndex = Number(await registry.leafCount()) - 1;
+
+    // 3. Mark user enrolled (do NOT persist enrollmentSecret in the store)
+    user.enrolled   = true;
+    user.enrolledAt = new Date().toISOString();
+    writeUsers(users);
+
+    return res.json({
+      success: true,
+      username,
+      enrollmentSecret,   // returned ONCE to the admin to relay to the voter
+      commitment,
+      leafIndex,
+      txHash: receipt.hash,
+    });
+  } catch (err) {
+    console.error("[/api/admin/enroll]", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

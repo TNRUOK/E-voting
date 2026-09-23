@@ -7,8 +7,11 @@ export default function Admin() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // "all" | "real" | "decoy"
-  const [activeTab, setActiveTab] = useState("votes"); // "votes" | "merkle" | "registrars"
+  const [activeTab, setActiveTab] = useState("votes"); // "votes" | "merkle" | "registrars" | "enroll"
   const [errorMsg, setErrorMsg] = useState("");
+  const [voters, setVoters] = useState([]);
+  const [enrolling, setEnrolling] = useState({});
+  const [enrollResult, setEnrollResult] = useState({});
 
   const fetchAuditData = async () => {
     try {
@@ -26,8 +29,34 @@ export default function Admin() {
     }
   };
 
+  const fetchVoters = async () => {
+    try {
+      const res = await authedFetch("/api/admin/voters");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setVoters(json.voters);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleEnroll = async (username) => {
+    setEnrolling(prev => ({ ...prev, [username]: true }));
+    setEnrollResult(prev => ({ ...prev, [username]: null }));
+    try {
+      const res = await authedFetch(`/api/admin/enroll/${username}`, { method: "POST" });
+      const json = await res.json();
+      setEnrollResult(prev => ({ ...prev, [username]: json }));
+      if (json.success) fetchVoters();
+    } catch (e) {
+      setEnrollResult(prev => ({ ...prev, [username]: { error: e.message } }));
+    } finally {
+      setEnrolling(prev => ({ ...prev, [username]: false }));
+    }
+  };
+
   useEffect(() => {
     fetchAuditData();
+    fetchVoters();
     const interval = setInterval(fetchAuditData, 4000);
     return () => clearInterval(interval);
   }, []);
@@ -152,6 +181,13 @@ export default function Admin() {
           style={{ padding: "8px 20px" }}
         >
           🛡️ 2-of-3 Threshold Shards
+        </button>
+        <button
+          onClick={() => { setActiveTab("enroll"); fetchVoters(); }}
+          className={`btn ${activeTab === "enroll" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "8px 20px" }}
+        >
+          👤 Voter Enrollment ({voters.filter(v => v.enrolled).length}/{voters.length})
         </button>
       </div>
 
@@ -357,6 +393,119 @@ export default function Admin() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TAB 4: Voter Enrollment Management */}
+      {activeTab === "enroll" && (
+        <div>
+          <div className="glass-panel" style={{ padding: 20, marginBottom: 20 }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 8 }}>👤 Voter Eligibility Enrollment</h3>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+              As administrator, you verify each voter's real-world identity (simulated here by their account login),
+              then click <strong>Enroll</strong> to generate a one-time enrollment secret, add its commitment to
+              <code style={{ margin: "0 4px", color: "var(--accent-cyan-light)" }}>EligibilityRegistry.sol</code>
+              on-chain, and issue the secret to the voter. The voter must use this secret to prove eligibility
+              (via ZK proof) before they can obtain 2-of-3 blind signatures.
+            </p>
+            <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(124,58,237,0.1)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem", color: "#C4B5FD" }}>
+              ⚠️ <strong>Simplification note:</strong> In a real election, the admin would verify a government-issued KYC credential.
+              The enrollment secret is generated server-side here for demo convenience; in production it would be generated client-side.
+            </div>
+          </div>
+
+          {voters.length === 0 ? (
+            <div className="glass-panel" style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+              No voter accounts found. Ask voters to sign up first.
+            </div>
+          ) : (
+            <div className="glass-panel" style={{ padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
+                <thead>
+                  <tr style={{ background: "rgba(15,23,42,0.9)", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-muted)" }}>
+                    <th style={{ padding: "14px 18px" }}>Username</th>
+                    <th style={{ padding: "14px 18px" }}>Role</th>
+                    <th style={{ padding: "14px 18px" }}>Enrollment Status</th>
+                    <th style={{ padding: "14px 18px" }}>Enrolled At</th>
+                    <th style={{ padding: "14px 18px" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {voters.map((v) => (
+                    <React.Fragment key={v.username}>
+                      <tr style={{ borderBottom: enrollResult[v.username] ? "none" : "1px solid rgba(255,255,255,0.05)" }}>
+                        <td style={{ padding: "14px 18px", fontWeight: 700, color: "var(--text-main)" }}>
+                          {v.username}
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          <span className={`badge ${v.role === "admin" ? "badge-purple" : "badge-green"}`} style={{ fontSize: "0.72rem" }}>
+                            {v.role === "admin" ? "👑 Admin" : "🗳️ Voter"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          {v.enrolled ? (
+                            <span className="badge badge-green" style={{ fontSize: "0.72rem", padding: "3px 10px" }}>✓ Enrolled</span>
+                          ) : (
+                            <span style={{ fontSize: "0.78rem", color: "#F87171" }}>✗ Not Enrolled</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "14px 18px", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                          {v.enrolledAt ? new Date(v.enrolledAt).toLocaleString() : "—"}
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          {v.role !== "admin" && !v.enrolled && (
+                            <button
+                              onClick={() => handleEnroll(v.username)}
+                              disabled={!!enrolling[v.username]}
+                              className="btn btn-primary"
+                              style={{ padding: "6px 16px", fontSize: "0.8rem" }}
+                            >
+                              {enrolling[v.username] ? "Enrolling..." : "✓ Enroll Voter"}
+                            </button>
+                          )}
+                          {v.enrolled && (
+                            <span style={{ fontSize: "0.78rem", color: "#34D399" }}>Enrollment complete</span>
+                          )}
+                          {v.role === "admin" && (
+                            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>N/A (admin)</span>
+                          )}
+                        </td>
+                      </tr>
+                      {enrollResult[v.username] && (
+                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: enrollResult[v.username].success ? "rgba(16,185,129,0.05)" : "rgba(239,68,68,0.05)" }}>
+                          <td colSpan={5} style={{ padding: "12px 18px" }}>
+                            {enrollResult[v.username].error ? (
+                              <div style={{ color: "#F87171", fontSize: "0.82rem" }}>❌ {enrollResult[v.username].error}</div>
+                            ) : (
+                              <div style={{ fontSize: "0.82rem" }}>
+                                <div style={{ color: "#34D399", fontWeight: 700, marginBottom: 8 }}>✓ Enrolled! Give this secret to <strong>{v.username}</strong> — it is shown ONCE only.</div>
+                                <div style={{ marginBottom: 4 }}>
+                                  <span style={{ color: "var(--text-muted)" }}>Enrollment Secret: </span>
+                                  <code style={{ color: "var(--accent-cyan-light)", wordBreak: "break-all", fontSize: "0.78rem" }}>
+                                    {enrollResult[v.username].enrollmentSecret}
+                                  </code>
+                                </div>
+                                <div style={{ marginBottom: 4 }}>
+                                  <span style={{ color: "var(--text-muted)" }}>Commitment: </span>
+                                  <code style={{ color: "#C4B5FD", fontSize: "0.75rem" }}>{enrollResult[v.username].commitment}</code>
+                                </div>
+                                <div>
+                                  <span style={{ color: "var(--text-muted)" }}>Leaf Index: </span>
+                                  <strong style={{ color: "var(--text-main)" }}>#{enrollResult[v.username].leafIndex}</strong>
+                                  <span style={{ color: "var(--text-muted)", marginLeft: 16 }}>Tx: </span>
+                                  <code style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>{enrollResult[v.username].txHash?.slice(0, 20)}...</code>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
